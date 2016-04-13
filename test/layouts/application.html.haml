@@ -1,0 +1,30 @@
+!!! 5
+%html
+  %head
+    = render 'layouts/head'
+
+  %body{ class: body_classes, data: { env: Rails.env } }
+    = browser_stack_button
+    = render "layouts/google_tag_manager"
+
+    #wrapper
+      = render 'notices/upgrade_browser'
+      = render "precompiled_asset_warning" if Rails.env.development?
+
+      - if content_for?(:header)
+        = yield(:header)
+      - else
+        = render 'layouts/header'
+
+      #container
+        #main-container{role: "main", class: main_container_classes}
+          = content_for?(:content) ? yield(:content) : yield
+        = render 'layouts/feedback'
+
+      - if content_for?(:footer)
+        = yield(:footer)
+      - else
+        = render 'layouts/footer'
+
+    = render onboarding_modal if onboarding_modal
+    = render 'layouts/footer_scripts'
