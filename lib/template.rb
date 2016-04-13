@@ -6,7 +6,7 @@ class Template
 
   def self.from_file(filename, basename: '')
     contents = File.read filename
-    name = filename.sub(/\A#{basename}\/?/, '').sub(/\..*\Z/, '')
+    name = filename.sub(/\A#{basename}\/?/, '').sub(/\..*\Z/, '').gsub('/_', '/')
 
     new(contents, name: name)
   end
@@ -25,6 +25,11 @@ class Template
     @name
   end
 
+  # The verbosity of Haml's ParseNodes make the builtin #inspect useless
+  def inspect
+    "#<#{self.class.name}:#{self.object_id} name:#{name}>"
+  end
+
   private
 
   def dirname
@@ -40,7 +45,7 @@ class Template
   def process_haml_node(haml_node)
     case haml_node.type
     when :script then
-      ruby = Parser::CurrentRuby.parse(haml_node.value[:text])
+      ruby = Parser::CurrentRuby.parse(haml_node.value[:text], file: self.name)
       process_ruby_node(ruby)
     end
   end
@@ -49,7 +54,13 @@ class Template
     case ruby_node.type
     when :yield then process_yield(ruby_node)
     when :send then process_call(ruby_node)
-    else ruby_node.children.compact.each { |child| process_ruby_node(child) } if ruby_node.children
+    else
+      if ruby_node.children
+        ruby_node.children
+          .compact
+          .select { |child| child.respond_to? :type }
+          .each { |child| process_ruby_node(child) }
+      end
     end
   end
 
@@ -75,6 +86,16 @@ class Template
       # s(:send, nil, :render,
       #   s(:str, 'template/name'))
       add_dependency ruby_node.children[2].children[0].to_s
+    when :hash
+      # s(:send, nil, :render,
+      #   s(:hash,
+      #     s(:pair,
+      #       s(:sym, :partial),
+      #       s(:str, "fnord"))))
+      ruby_node.children[2].children.detect do |pair|
+        key, value = pair
+        add_dependency(value) if key.to_s == 'partial'
+      end
     when :send
       # s(:send, nil, :render,
       #   s(:send, nil, :onboarding_modal))

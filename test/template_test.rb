@@ -3,8 +3,10 @@ require 'minitest/autorun'
 require 'template'
 
 class TestTemplate < Minitest::Test
+  LayoutFile = 'test/layouts/application.html.haml'
+
   def test_filename_handling
-    template = Template.from_file('test/layouts/application.html.haml', basename: 'test')
+    template = Template.from_file(LayoutFile, basename: 'test')
     assert_equal 'layouts/application', template.name
   end
 
@@ -31,7 +33,7 @@ class TestTemplate < Minitest::Test
   end
 
   def test_fixture_template
-    template = Template.from_file('test/layouts/application.html.haml', basename: 'test')
+    template = Template.from_file(LayoutFile, basename: 'test')
 
     assert_equal Set.new(%w{layouts/head layouts/google_tag_manager layouts/precompiled_asset_warning notices/upgrade_browser layouts/header layouts/feedback layouts/footer layouts/footer_scripts}), template.dependencies
     assert_equal Set.new(%w{header content YIELD footer}), template.contents
