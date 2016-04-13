@@ -35,5 +35,6 @@ class TestTemplate < Minitest::Test
 
     assert_equal Set.new(%w{layouts/head layouts/google_tag_manager layouts/precompiled_asset_warning notices/upgrade_browser layouts/header layouts/feedback layouts/footer layouts/footer_scripts}), template.dependencies
     assert_equal Set.new(%w{header content YIELD footer}), template.contents
+    assert_equal Set.new(%w{onboarding_modal}), template.references
   end
 end

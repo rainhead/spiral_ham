@@ -78,7 +78,7 @@ class Template
     when :send
       # s(:send, nil, :render,
       #   s(:send, nil, :onboarding_modal))
-      add_reference ruby_node.children[2].children[1]
+      add_reference ruby_node.children[2].children[1].to_s
     end
   end
 
