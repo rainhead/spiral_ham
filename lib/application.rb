@@ -11,11 +11,7 @@ class Application
     view_root = File.join(@root, 'app/views')
     all_views = all_views_in(view_root)
     templates = all_views.map do |filename|
-      begin
-        Template.from_file(filename, basename: view_root)
-      rescue Parser::SyntaxError => e
-        STDERR.puts "Syntax error reading #{filename}: #{e}"
-      end
+      Template.from_file(filename, basename: view_root)
     end.compact
 
     @templates = templates.inject({}) do |hash, template|

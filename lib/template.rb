@@ -6,7 +6,7 @@ class Template
 
   def self.from_file(filename, basename: '')
     contents = File.read filename
-    name = filename.sub(/\A#{basename}\/?/, '').sub(/\..*\Z/, '').gsub('/_', '/')
+    name = filename.sub(/\A#{basename}\/?/, '').sub(/\.[^\/]+\Z/, '').gsub('/_', '/')
 
     new(contents, name: name)
   end
@@ -25,7 +25,7 @@ class Template
     @name
   end
 
-  # The verbosity of Haml's ParseNodes make the builtin #inspect useless
+  # The verbosity of Haml's ParseNodes makes the builtin #inspect useless
   def inspect
     "#<#{self.class.name}:#{self.object_id} name:#{name}>"
   end
@@ -44,24 +44,34 @@ class Template
 
   def process_haml_node(haml_node)
     case haml_node.type
-    when :script then
-      ruby = Parser::CurrentRuby.parse(haml_node.value[:text], file: self.name)
-      process_ruby_node(ruby)
+    when :silent_script, :script then
+      return if haml_node.value[:keyword] == 'else'
+
+      script = haml_node.value[:text].strip
+      script.sub!(/\A(if|elsif|unless) /, '')
+      script.sub!(/ do( [|{].+[|}])?\s*\Z/, '')
+      ruby_node = Parser::CurrentRuby.parse(script, file: self.name)
+      # parser will return nil for comments
+      process_ruby_node(ruby_node) if ruby_node
     end
   end
 
   def process_ruby_node(ruby_node)
     case ruby_node.type
+    when :ivar then add_reference(ruby_node.children[0])
     when :yield then process_yield(ruby_node)
     when :send then process_call(ruby_node)
-    else
-      if ruby_node.children
-        ruby_node.children
-          .compact
-          .select { |child| child.respond_to? :type }
-          .each { |child| process_ruby_node(child) }
-      end
+    when :block then process_block(ruby_node)
+    when :pair then process_ruby_node(ruby_node.children[1])
+    else process_children(ruby_node) if ruby_node.children
     end
+  end
+
+  def process_children(ruby_node)
+    ruby_node.children
+      .compact
+      .select { |child| child.respond_to? :type }
+      .each { |child| process_ruby_node(child) }
   end
 
   def process_yield(ruby_node)
@@ -75,9 +85,27 @@ class Template
   end
 
   def process_call(ruby_node)
-    case ruby_node.children[1]
-    when :render then process_render(ruby_node)
+    if ruby_node.children[0]
+      # s(:send,
+      #   s(:send, nil, :foo), :render)
+      process_ruby_node(ruby_node.children[0])
+    else
+      # s(:send, nil, :render)
+      method_name = ruby_node.children[1]
+
+      case method_name
+      when :render then process_render(ruby_node)
+      else process_children(ruby_node)
+      end
     end
+  end
+
+  def process_block(ruby_node)
+    # s(:block,
+    #   s(:send, nil, :render,
+    #     s(:send, nil, :foo)),
+    #   s(:args), nil)
+    process_ruby_node(ruby_node.children[1])
   end
 
   def process_render(ruby_node)
@@ -92,14 +120,21 @@ class Template
       #     s(:pair,
       #       s(:sym, :partial),
       #       s(:str, "fnord"))))
-      ruby_node.children[2].children.detect do |pair|
-        key, value = pair
-        add_dependency(value) if key.to_s == 'partial'
+      ruby_node.children[2].children.each do |pair|
+        key, value = pair.children
+
+        next unless key.type == :sym
+
+        if key.children.first == :partial && value.type == :str
+          add_dependency(value.children.first)
+        else
+          process_ruby_node(value)
+        end
       end
     when :send
       # s(:send, nil, :render,
       #   s(:send, nil, :onboarding_modal))
-      add_reference ruby_node.children[2].children[1].to_s
+      add_reference ruby_node.children[2].children[1]
     end
   end
 
@@ -112,6 +147,6 @@ class Template
   end
 
   def add_reference(name)
-    @references << name
+    @references << name.to_sym
   end
 end
